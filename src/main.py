@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import load_config
 from .graph import bfs, test_source
+from .reverse import reverse_bfs, reverse_test_repository
 from .maven import fetch_pom, local_pom, parse_pom, pom_url
 from .source import maven_source
 
@@ -66,11 +67,29 @@ def _print_graph(root, graph):
         print(f'WARNING: {warning}', file=sys.stderr)
 
 
+def _reverse(settings, max_nodes):
+    """Show reverse dependencies, with repository scope made explicit."""
+    root, graph = _graph_input(settings, max_nodes)
+    if settings['test_mode'] and settings['test_path'].endswith('.json'):
+        repository, _ = test_source(settings['test_path'])
+        result = reverse_test_repository(
+            repository, root, settings['filter_substring'])
+        print('Scope: entire supplied test repository')
+    else:
+        result = reverse_bfs(graph, root)
+        print('Scope: discovered graph ONLY; not the entire Maven index')
+        print('WARNING: Maven POMs do not list their reverse dependents')
+    print(f'Reverse dependencies of {root}:')
+    for item in result:
+        print(f'  - {item}')
+    print(f'Total: {len(result)}')
+
+
 def main(argv=None):
     """Run one stage (Stage 2 remains the default for compatibility)."""
     parser = argparse.ArgumentParser(description='Maven graph, variant 24')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--stage', type=int, choices=(1, 2, 3), default=2)
+    parser.add_argument('--stage', type=int, choices=(1, 2, 3, 4), default=2)
     parser.add_argument('--max-nodes', type=int, default=100)
     args = parser.parse_args(argv)
     try:
@@ -81,9 +100,11 @@ def main(argv=None):
             _print_settings(settings)
         elif args.stage == 2:
             _direct(settings)
-        else:
+        elif args.stage == 3:
             root, graph = _graph_input(settings, args.max_nodes)
             _print_graph(root, graph)
+        else:
+            _reverse(settings, args.max_nodes)
     except ValueError as exc:
         print(f'Error: {exc}', file=sys.stderr)
         return 1
