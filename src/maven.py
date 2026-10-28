@@ -68,15 +68,8 @@ def resolve(text: str, props: dict[str, str]) -> str:
     return text
 
 
-def parse_pom(data: bytes) -> list[Dependency]:
-    """Parse direct dependencies only, excluding dependencyManagement."""
-    try:
-        root = ET.fromstring(data)
-    except ET.ParseError as exc:
-        raise ValueError(f'Invalid POM XML: {exc}') from exc
-    if root.tag.split('}')[-1] != 'project':
-        raise ValueError('POM root element must be <project>')
-
+def _pom_properties(root):
+    """Find local property declarations and key Maven project properties."""
     parent = child(root, 'parent')
     group = value(root, 'groupId') or value(parent, 'groupId')
     version = value(root, 'version') or value(parent, 'version')
@@ -90,18 +83,26 @@ def parse_pom(data: bytes) -> list[Dependency]:
     if properties is not None:
         for item in properties:
             props[item.tag.split('}')[-1]] = (item.text or '').strip()
+    return props
 
-    # Version declarations from this POM's dependencyManagement section.
+
+def _managed_versions(root, props):
+    """Read versions declared in this POM's dependencyManagement."""
     managed = {}
     management = child(root, 'dependencyManagement')
-    managed_container = child(management, 'dependencies') if management is not None else None
-    if managed_container is not None:
-        for item in managed_container:
+    container = (child(management, 'dependencies')
+                 if management is not None else None)
+    if container is not None:
+        for item in container:
             if item.tag.split('}')[-1] == 'dependency':
                 key = (resolve(value(item, 'groupId'), props),
                        resolve(value(item, 'artifactId'), props))
                 managed[key] = resolve(value(item, 'version'), props)
+    return managed
 
+
+def _parse_direct(root, props, managed):
+    """Extract direct entries without descending into nested POM sections."""
     direct = child(root, 'dependencies')
     if direct is None:
         return []
@@ -109,18 +110,30 @@ def parse_pom(data: bytes) -> list[Dependency]:
     for item in direct:
         if item.tag.split('}')[-1] != 'dependency':
             continue
-        dep_group = resolve(value(item, 'groupId'), props)
-        dep_artifact = resolve(value(item, 'artifactId'), props)
-        dep_version = resolve(value(item, 'version'), props)
-        if not dep_version:
-            dep_version = managed.get((dep_group, dep_artifact), '')
-        if not dep_group or not dep_artifact:
+        group = resolve(value(item, 'groupId'), props)
+        artifact = resolve(value(item, 'artifactId'), props)
+        version = resolve(value(item, 'version'), props)
+        if not group or not artifact:
             raise ValueError('Dependency missing groupId or artifactId')
-        result.append(Dependency(dep_group, dep_artifact,
-                                 dep_version or '(managed externally)',
-                                 resolve(value(item, 'scope') or 'compile', props),
-                                 value(item, 'optional').lower() == 'true'))
+        version = version or managed.get((group, artifact), '')
+        result.append(Dependency(
+            group, artifact, version or '(managed externally)',
+            resolve(value(item, 'scope') or 'compile', props),
+            value(item, 'optional').lower() == 'true'))
     return result
+
+
+def parse_pom(data: bytes) -> list[Dependency]:
+    """Parse directly declared dependencies without Maven tooling."""
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError as exc:
+        raise ValueError(f'Invalid POM XML: {exc}') from exc
+    if root.tag.split('}')[-1] != 'project':
+        raise ValueError('POM root element must be <project>')
+    props = _pom_properties(root)
+    managed = _managed_versions(root, props)
+    return _parse_direct(root, props, managed)
 
 
 def local_pom(path: str) -> bytes:

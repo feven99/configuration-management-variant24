@@ -1,78 +1,138 @@
-# Configuration Management — Practice 2, Variant 24
+# Configuration Management — Practical Work No. 2, Variant 24
 
-## Task
+Five-stage CLI dependency graph tool for Java Maven artifacts, implemented
+using **only Python 3.10+ standard library** for HTTP requests, XML parsing,
+JSON, configuration, BFS, and rendering. No Maven/pip or third-party dependency
+retrieval library is used by the implementation.
 
-Stage 2: retrieve and print the **direct dependencies** of a Java Maven
-artifact at a specified version, using an INI configuration and the URL of a
-Maven repository. Maven, pip packages, and third-party XML/HTTP libraries are
-not used. The project uses only Python 3.10+ standard-library modules.
+Source assignment: `ИКБО-51-25`, variant 24, pages 77–79.
 
-## Configuration
+## Run in Windows VS Code
 
-Edit `config.ini`:
+Open **this folder** (the one containing `src`, `tests`, and `config.ini`).
+In the terminal, type commands without the `PS C:\...>` prompt:
 
-- `group_id`: Maven group ID (e.g., `org.apache.commons`).
-- `artifact_id`: Maven artifact ID (e.g., `commons-lang3`).
-- `version`: exact Maven version (e.g., `3.12.0`).
-- `repository`: HTTPS base URL of a Maven-layout repository.
-- `test_mode`: `true` to read an offline POM; otherwise `false`.
-- `test_path`: path to a local POM when test mode is on.
-- `ascii_tree`: Stage 1 setting, reserved for later visualization.
-- `filter_substring`: Stage 1 setting, reserved for Stage 3.
-
-Maven identifies packages by `group_id:artifact_id:version`, so group and
-artifact are separate configuration fields.
-
-## Run
-
-```bash
-./run.sh
-# or:
-python3 -m src.main --config config.ini
+```powershell
+py --version
+py -m unittest discover -s tests -v
 ```
 
-For a reproducible offline demonstration, run `python3 -m src.main --config config.offline.ini`; this outputs:
+Commands for all five stages:
 
-```text
-Direct dependencies of org.example:demo:1.0.0:
-  - junit:junit:4.13.2 [scope=test]
-  - org.slf4j:slf4j-api:2.0.9 [scope=compile]
-Total: 2
+```powershell
+# Stage 1: show the INI values and validate them
+py -m src.main --stage 1 --config config.graph.ini
+
+# Stage 2: direct dependencies from a local POM
+py -m src.main --stage 2 --config config.offline.ini
+
+# Stage 2: direct dependencies from the real Maven Central repository
+py -m src.main --stage 2 --config config.ini
+
+# Stage 3: iterative BFS on a test graph (cycles and shared nodes)
+py -m src.main --stage 3 --config config.graph.ini
+
+# Stage 3: filter package D from the graph
+py -m src.main --stage 3 --config config.graph.filtered.ini
+
+# Stage 4: reverse (incoming) dependencies in the complete test graph
+py -m src.main --stage 4 --config config.graph.ini
+
+# Stage 5: export PlantUML and SVG, open image, print ASCII tree
+py -m src.main --stage 5 --config config.graph.ini
 ```
 
-The offline config matches the coordinates declared by the sample POM.
+Stage 5 automatically opens `output/A.svg` in your browser, while saving
+editable PlantUML diagram source to `output/A.puml`. If your computer cannot
+open a browser automatically, open the SVG file manually. In headless
+runs append `--no-open`. Output is ignored by Git to avoid committing generated
+artifacts. The PlantUML diagram can also be rendered using an external
+PlantUML renderer, but no renderer installation is necessary to view the SVG.
 
-## Tests
+## Three separate graph demonstrations (Stage 5)
 
-```bash
-python3 -m unittest discover -s tests -v
+```powershell
+py -m src.main --stage 5 --config config.graph.ini --package A
+py -m src.main --stage 5 --config config.graph.ini --package B
+py -m src.main --stage 5 --config config.graph.ini --package F
 ```
 
-## Implementation notes and limitations
+A has a cycle (A → B → D → A), B shares downstream descendants, and F
+connects into the cycle. The test repository also contains an isolated H.
 
-- Retrieves `group/path/artifact/version/artifact-version.pom` directly over
-  HTTPS, then parses XML using `xml.etree.ElementTree`.
-- Only top-level `<project><dependencies>` are returned; dependencies inside
-  `<dependencyManagement>` are not counted as direct dependencies.
-- Includes dependency scope and optional flag. Resolves straightforward POM
-  properties and versions managed in the same POM.
-- Parent POMs, imported BOMs, Maven profiles, activated properties, dynamic
-  versions, and full effective-POM inheritance are **not** resolved. An
-  unspecified version not managed locally is marked `(managed externally)`.
-- Output includes all directly declared dependencies, including test,
-  provided, and optional dependencies; this is *not* the resolved runtime
-  dependency graph.
-- Network errors, invalid configuration and malformed POMs return an error.
+## Configuration (`[maven]` INI section)
 
-## Git submission
+| Field | Meaning |
+| --- | --- |
+| `group_id` | Maven group ID such as `org.apache.commons` |
+| `artifact_id` | Maven artifact ID such as `commons-lang3` |
+| `version` | Exact version of the root artifact |
+| `repository` | HTTPS URL of a Maven-layout repository |
+| `test_mode` | `true` for local files, `false` for HTTP |
+| `test_path` | Offline POM (`.pom`) for Stage 2 or JSON mock graph for Stages 3–5 |
+| `ascii_tree` | Enable the Stage 5 ASCII output |
+| `filter_substring` | Exclude matching package names from BFS graph traversal |
+| `package` | Uppercase test node, such as `A`, for graph mock mode |
 
-Initialize your public repo and use a Conventional Commit for Stage 2:
+Stage 1 prints all settings as key-value entries. Errors include missing
+sections, invalid group/artifact/version, HTTP rather than HTTPS, wrong
+booleans, missing test graph/POM and invalid uppercase mock package names.
+To demonstrate validation and errors, run:
 
-```bash
-git init
-git add README.md .gitignore config.ini config.offline.ini src tests examples run.sh
-git commit -m "feat(maven): collect direct dependencies from POM files"
+```powershell
+py -m unittest tests.test_config -v
 ```
 
-Push it to your public Git hosting account separately. Stage 3 and subsequent
-features have intentionally not been implemented.
+## File roles
+
+- `src/config.py`: Stage 1, INI loading and parameter validation.
+- `src/maven.py`: Stage 2, direct POM dependency retrieval and XML parse.
+- `src/source.py`: adapt remote Maven POMs to graph edges.
+- `src/graph.py`: Stage 3, iterative BFS, substring filter, mock graph loader.
+- `src/reverse.py`: Stage 4, BFS for incoming/reverse dependencies.
+- `src/visual.py`: Stage 5, PlantUML source, SVG image, ASCII tree.
+- `src/main.py`: command-line entry point with `--stage 1..5`.
+- `tests/`: regression tests for every implemented stage.
+- `examples/graph.json`: uppercase Latin mock dependency repository.
+- `examples/sample.pom`: offline Maven POM example.
+- `COMPARISON.md`: native Maven comparison instructions and known differences.
+- `run.bat` / `run.sh`: launch scripts.
+
+## Algorithms and correctness
+
+The forward graph uses a FIFO queue (`collections.deque`), not recursion.
+A visited set prevents infinite cycle processing, while repeated/cyclic edges
+remain in the adjacency list. The filter is applied to artifact/package names.
+The reverse query also uses iterative BFS. In JSON mock mode, it indexes the
+**entire** supplied mock repository, including nodes that cannot be reached
+from the chosen package, so incoming edges are not incorrectly omitted.
+
+In online mode, **a single artifact's POM does not identify every other
+artifact which depends on it**. Therefore reverse queries are necessarily
+limited to the discovered forward graph and explicitly say so. A complete
+public-repository reverse-dependency index is outside this assignment's
+input data and is not fabricated.
+
+## Maven resolution limitations
+
+The tool retrieves Maven POMs by URL using their exact declared coordinates.
+It resolves local properties and this-POM dependency-management versions,
+but does not implement full Maven semantics: inherited parent POMs,
+imported BOMs, profiles, Maven ranges/dynamic versions, exclusions, mediation,
+or effective scopes. Stage 3 online graphs may therefore be partial; the CLI
+prints fetch errors and the `--max-nodes` limit (100 by default). Stage 2
+prints all direct POM declarations, not Maven's resolved runtime dependencies.
+
+For the required comparison with Maven's native tool, see `COMPARISON.md`.
+
+## Tests and Git submission
+
+```powershell
+py -m unittest discover -s tests -v
+```
+
+The original GitHub repository already has the Stage 2 commit. The accompanying
+`apply_stages.ps1` helper in the delivery ZIP adds Stages 1, 3, 4, and 5
+as **four real, separate Conventional Commits**, with tests after each stage,
+without overwriting `.git`. Use the supplied script from the ZIP and then
+run `git push origin main`. Never commit `output/`, `__pycache__/` or binaries.

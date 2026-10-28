@@ -23,7 +23,8 @@ class MavenTests(unittest.TestCase):
     def test_dependency_management_is_not_a_direct_dependency(self):
         xml = b'''<project><dependencyManagement><dependencies>
         <dependency><groupId>a</groupId><artifactId>b</artifactId>
-        <version>1.2</version></dependency></dependencies></dependencyManagement>
+        <version>1.2</version></dependency></dependencies>
+        </dependencyManagement>
         <dependencies><dependency><groupId>a</groupId>
         <artifactId>b</artifactId></dependency></dependencies></project>'''
         deps = parse_pom(xml)
@@ -52,14 +53,17 @@ class MavenTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             config = Path(folder) / 'config.ini'
             config.write_text('[maven]\ngroup_id=x\nartifact_id=y\n'
-                              'version=1\nrepository=http://bad.example\n')
+                              'version=1\n'
+                              'repository=http://bad.example\n')
             with self.assertRaisesRegex(ValueError, 'HTTPS'):
                 load_config(str(config))
 
     def test_optional(self):
-        data = (b'<project><dependencies><dependency><groupId>x</groupId>'
+        data = (b'<project><dependencies><dependency>'
+                b'<groupId>x</groupId>'
                 b'<artifactId>y</artifactId><version>1</version>'
-                b'<optional>true</optional></dependency></dependencies></project>')
+                b'<optional>true</optional></dependency>'
+                b'</dependencies></project>')
         self.assertTrue(parse_pom(data)[0].optional)
 
 

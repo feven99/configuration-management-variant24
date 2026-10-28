@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+import webbrowser
 from pathlib import Path
 
 from .config import load_config
@@ -9,6 +10,7 @@ from .graph import bfs, test_source
 from .reverse import reverse_bfs, reverse_test_repository
 from .maven import fetch_pom, local_pom, parse_pom, pom_url
 from .source import maven_source
+from .visual import ascii_tree, save_visuals
 
 
 def _print_settings(settings):
@@ -85,12 +87,36 @@ def _reverse(settings, max_nodes):
     print(f'Total: {len(result)}')
 
 
+def _visualize(settings, max_nodes, output, package, open_image):
+    """Generate PlantUML and SVG then optionally open the image on screen."""
+    config = dict(settings)
+    if package:
+        config['package'] = package
+    root, graph = _graph_input(config, max_nodes)
+    puml_file, svg_file = save_visuals(graph, root, output)
+    _print_graph(root, graph)
+    print(f'PlantUML source: {puml_file}')
+    print(f'SVG image: {svg_file}')
+    if config['ascii_tree']:
+        print('ASCII tree:')
+        print(ascii_tree(graph, root))
+    if open_image:
+        if webbrowser.open(svg_file.resolve().as_uri()):
+            print('Opened graph image in your browser')
+        else:
+            print('Open the SVG file in a browser to view the image')
+
+
 def main(argv=None):
     """Run one stage (Stage 2 remains the default for compatibility)."""
     parser = argparse.ArgumentParser(description='Maven graph, variant 24')
     parser.add_argument('--config', default='config.ini')
-    parser.add_argument('--stage', type=int, choices=(1, 2, 3, 4), default=2)
+    parser.add_argument('--stage', type=int, choices=(1, 2, 3, 4, 5), default=2)
     parser.add_argument('--max-nodes', type=int, default=100)
+    parser.add_argument('--package', help='Uppercase test node (Stage 5)')
+    parser.add_argument('--output', default='output')
+    parser.add_argument('--no-open', action='store_true',
+                        help='Do not open the SVG in a browser')
     args = parser.parse_args(argv)
     try:
         if args.max_nodes < 1:
@@ -103,8 +129,11 @@ def main(argv=None):
         elif args.stage == 3:
             root, graph = _graph_input(settings, args.max_nodes)
             _print_graph(root, graph)
-        else:
+        elif args.stage == 4:
             _reverse(settings, args.max_nodes)
+        else:
+            _visualize(settings, args.max_nodes, args.output,
+                       args.package, not args.no_open)
     except ValueError as exc:
         print(f'Error: {exc}', file=sys.stderr)
         return 1
