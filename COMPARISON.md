@@ -47,3 +47,31 @@ The user's prior run demonstrated live repository access. Maven itself is not
 installed in the delivery environment, so no native Maven command output is
 claimed here. Run the commands above to complete the external comparison on
 an installation with Maven available, and save the observed output for class.
+## Actual Comparison Results
+
+Date: 28 October 2026
+
+### Python Application
+
+The Python application analyzed `org.apache.commons:commons-lang3:3.12.0` and found 7 directly declared dependencies in its POM file. The dependencies were reported with test scope.
+
+### Apache Maven 3.10.0
+
+Maven was executed using `examples/comparison-pom.xml` with the `dependency:tree` goal.
+
+```text
+org.example:graph-comparison:jar:1.0.0
+\- org.apache.commons:commons-lang3:jar:3.12.0:compile
+BUILD SUCCESS
+```
+
+### Explanation of Differences
+
+The Python application reads raw POM dependency declarations, including test dependencies. Maven builds the resolved dependency tree for the consuming project and applies dependency scope and transitivity rules.
+
+Therefore, the Python application reported 7 declared dependencies for commons-lang3, while Maven showed commons-lang3 as one direct compile dependency of the comparison project. These outputs describe different dependency relationships and should not be interpreted as equivalent graphs.
+
+### Conclusion
+
+The Python implementation successfully retrieves Maven POM dependencies and produces dependency graphs. The Maven comparison demonstrates the difference between raw POM metadata and Maven's effective dependency resolution.
+
